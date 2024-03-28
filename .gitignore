@@ -6,3 +6,7 @@ coverage/
 Gemfile.lock
 spec/tmp/
 *.gem
+
+.idea
+
+reports
