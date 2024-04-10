@@ -7,8 +7,9 @@ class ProjectConfig
   include DiscardChangesBefore
 
   attr_reader :target_path, :jira_config, :all_boards, :possible_statuses,
-    :download_config, :file_configs, :exporter, :data_version, :name, :board_configs, :settings
-  attr_accessor :time_range, :jira_url
+    :download_config, :file_configs, :exporter, :data_version, :name, :board_configs,
+    :settings
+  attr_accessor :time_range, :jira_url, :project_id
 
   def initialize exporter:, jira_config:, block:, target_path: '.', name: ''
     @exporter = exporter
@@ -39,8 +40,9 @@ class ProjectConfig
 
   def run
     unless aggregated_project?
-      load_status_category_mappings
       load_all_boards
+      @project_id = @all_boards.first.last.project_id
+      load_status_category_mappings
       load_project_metadata
       load_sprints
     end
@@ -99,7 +101,7 @@ class ProjectConfig
       return
     end
 
-    add_possible_status Status.new(name: status, id: nil, category_name: category, category_id: nil)
+    add_possible_status Status.new(name: status, category_name: category)
   end
 
   def load_all_boards
@@ -170,14 +172,7 @@ class ProjectConfig
     end
 
     status_json_snippets.each do |snippet|
-      category_config = snippet['statusCategory']
-      status_name = snippet['name']
-      add_possible_status Status.new(
-        name: status_name,
-        id: snippet['id'].to_i,
-        category_name: category_config['name'],
-        category_id: category_config['id'].to_i
-      )
+      add_possible_status Status.new(raw: snippet)
     end
   end
 
@@ -198,14 +193,30 @@ class ProjectConfig
   end
 
   def add_possible_status status
+    # If it's project scoped and it's not this project, just ignore it.
+    return if status.project_id && status.project_id != @project_id
+
     existing_status = find_status(name: status.name)
 
-    if existing_status
-      if existing_status.category_name != status.category_name
-        raise "Redefining status category #{status} with #{existing_status}. Was one set in the config?"
-      end
+    # If it isn't there, add it and go.
+    return @possible_statuses << status unless existing_status
 
+    # If the existing one has a project id then it's already the most precise. Ignore the new one.
+    # No need to check categories as status_category_mapping can't add a project_id so by definition
+    # this data came from Jira.
+    return if existing_status && existing_status.project_id
+
+    # If the new one has a project_id then it's more precise so replace the old one with this,
+    # regardless of whether the categories match.
+    if status.project_id
+      @possible_statuses.delete(existing_status)
+      @possible_statuses << status
       return
+    end
+
+    # This new status may have come from status_category_mapping so verify that categories match.
+    if existing_status.category_name != status.category_name
+      raise "Redefining status category #{status} with #{existing_status}. Was one set in the config?"
     end
 
     @possible_statuses << status

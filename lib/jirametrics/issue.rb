@@ -51,15 +51,7 @@ class Issue
   def summary = @raw['fields']['summary']
 
   def status
-    raw_status = @raw['fields']['status']
-    raw_category = raw_status['statusCategory']
-
-    Status.new(
-      name: raw_status['name'],
-      id: raw_status['id'].to_i,
-      category_name: raw_category['name'],
-      category_id: raw_category['id'].to_i
-    )
+    Status.new raw: @raw['fields']['status']
   end
 
   def status_id
@@ -495,7 +487,7 @@ class Issue
   end
 
   def load_history_into_changes
-    @raw['changelog']['histories'].each do |history|
+    @raw['changelog']['histories']&.each do |history|
       created = parse_time(history['created'])
 
       # It should be impossible to not have an author but we've seen it in production
@@ -507,7 +499,7 @@ class Issue
   end
 
   def load_comments_into_changes
-    @raw['fields']['comment']['comments'].each do |comment|
+    @raw['fields']['comment']['comments']&.each do |comment|
       raw = {
         'field' => 'comment',
         'to' => comment['id'],
