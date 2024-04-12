@@ -1,6 +1,6 @@
 target/
 jira_config*.json
-config.rb
+#config.rb
 coverage/
 .DS_Store
 Gemfile.lock
@@ -9,4 +9,4 @@ spec/tmp/
 
 .idea
 
-reports
+downloader.log
